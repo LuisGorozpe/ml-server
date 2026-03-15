@@ -9,12 +9,14 @@ RUN apt update && apt install -y \
     python3 python3-pip python3-venv \
     r-base \
     clang \
+    sqlite3 \
+    libsqlite3-dev \
     libssl-dev \
     libxml2-dev \
     libcurl4-openssl-dev \
     ca-certificates \
     build-essential bash \
-     && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://install.julialang.org -o install-julia.sh \
     && chmod +x install-julia.sh \
