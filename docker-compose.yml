@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+
+  jupyterlab:
+    build: ./jupyterlab
+    ports:
+      - "8888:8888"
+    volumes:
+      - notebooks:/workspace
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      AWS_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      - mlflow
+      - minio
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:///mlflow.db
+      --default-artifact-root s3://mlflow/
+      --host 0.0.0.0
+    environment:
+      AWS_ACCESS_KEY_ID: minio
+      AWS_SECRET_ACCESS_KEY: miniopass
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      - minio
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: miniopass
+    volumes:
+      - minio_data:/data
+
+  code-server:
+    build: ./code-server
+    ports:
+      - "8080:8080"
+    volumes:
+      - workspace:/workspace
+
+  marimo:
+    build: ./marimo
+    ports:
+      - "2718:2718"
+
+volumes:
+
+  notebooks:
+  workspace:
+  minio_data:
