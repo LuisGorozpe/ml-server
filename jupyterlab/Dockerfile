@@ -1,8 +1,9 @@
-FROM debian:bookworm-slim
+# FROM debian:bookworm-slim (uncoment  this line to build for amd64)
+FROM arm64v8/debian:latest
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y \
+RUN apt update && apt install -y \
     curl git build-essential cmake \
     python3 python3-pip python3-venv \
     r-base \
@@ -11,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libcurl4-openssl-dev \
     ca-certificates \
-    bash \
+    build-essential bash \
      && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://install.julialang.org -o install-julia.sh \
