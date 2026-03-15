@@ -11,7 +11,7 @@ RUN apt update && apt install -y \
     libxml2-dev \
     libcurl4-openssl-dev \
     ca-certificates \
-    build-essential bash \
+    bash \
      && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://install.julialang.org -o install-julia.sh \
