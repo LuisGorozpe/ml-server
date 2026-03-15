@@ -1,5 +1,5 @@
 # FROM debian:bookworm-slim (uncoment  this line to build for amd64)
-FROM arm64v8/debian:latest
+FROM arm64v8/debian:stable
 
 ENV DEBIAN_FRONTEND=noninteractive
 
