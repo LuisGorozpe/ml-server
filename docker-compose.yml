@@ -4,6 +4,9 @@ services:
 
   jupyterlab:
     build: ./jupyterlab
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     ports:
       - "8888:8888"
     volumes:
