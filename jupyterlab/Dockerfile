@@ -1,6 +1,8 @@
 # FROM debian:bookworm-slim (uncoment  this line to build for amd64)
 FROM arm64v8/debian:stable
 
+RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && apt install -y \
