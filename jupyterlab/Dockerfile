@@ -2,7 +2,7 @@ FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt update && apt install -y \
+RUN apt-get update && apt-get install -y \
     curl git build-essential cmake \
     python3 python3-pip python3-venv \
     r-base \
