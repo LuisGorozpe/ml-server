@@ -7,10 +7,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y \
     curl git build-essential cmake \
     python3 python3-pip python3-venv \
-    r-base \
+    r-base xz-utils \
     clang \
-    sqlite3 \
-    libsqlite3-dev \
+    sqlite3 tk-dev \
+    libsqlite3-dev libncursesw5-dev\
     libssl-dev \
     libxml2-dev \
     libcurl4-openssl-dev \
