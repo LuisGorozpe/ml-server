@@ -102,7 +102,7 @@ RUN evcxr_jupyter --install
 #RUN mkdir -p /etc/jupyterhub
 #RUN jupyterhub --generate-config -f /etc/jupyterhub/jupyterhub_config.py
 RUN mkdir -p /etc/jupyterhub /srv/jupyterhub
-COPY /jupyterlab/jupyterhub_config.py /etc/jupyterhub/jupyterhub_config.py
+COPY jupyterhub_config.py /etc/jupyterhub/jupyterhub_config.py
 WORKDIR /srv/jupyterhub
 
 EXPOSE 8888
