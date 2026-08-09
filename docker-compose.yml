@@ -4,6 +4,7 @@ services:
 
   jupyterlab:
     build: ./jupyterlab
+    restart: unless-stopped
     dns:
       - 8.8.8.8
       - 1.1.1.1
@@ -20,6 +21,7 @@ services:
 
   mlflow:
     image: ghcr.io/mlflow/mlflow
+    restart: unless-stopped
     ports:
       - "5000:5000"
     command: >
@@ -35,7 +37,8 @@ services:
       - minio
 
   minio:
-    image: minio/minio
+    image: pgsty/silo:latest
+    restart: unless-stopped
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -48,6 +51,7 @@ services:
 
   code-server:
     build: ./code-server
+    restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:

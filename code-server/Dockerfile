@@ -32,7 +32,7 @@ RUN pyenv install 3.13.0 && pyenv global 3.13.0
 RUN pip install --no-cache-dir \
     poetry \
     mlflow \
-    jupyterlab
+    jupyterlab ipykernel
 
 RUN code-server --install-extension ms-python.python \
  && code-server --install-extension ms-toolsai.jupyter
