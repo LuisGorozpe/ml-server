@@ -31,18 +31,19 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh \
     && rm rustup.sh
 
 ENV PATH="/opt/cargo/bin:${PATH}"
-#ENV PATH="/root/.cargo/bin:${PATH}"
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # -----------------
 # Python env
 # -----------------
+ENV PYENV_ROOT=/opt/pyenv
 
 RUN curl -fsSL https://pyenv.run -o pyenv.sh \
     && chmod +x pyenv.sh \
     && ./pyenv.sh -y \
     && rm pyenv.sh
 
-ENV PYENV_ROOT=/opt/pyenv
+
 ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 
 RUN pyenv install 3.13.11
