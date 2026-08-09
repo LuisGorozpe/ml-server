@@ -23,12 +23,15 @@ RUN curl -fsSL https://install.julialang.org -o install-julia.sh \
     && ./install-julia.sh -y \
     && rm install-julia.sh
 
+ENV CARGO_HOME=/opt/cargo RUSTUP_HOME=/opt/rustup
+
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh \
     && chmod +x rustup.sh \
     && ./rustup.sh -y \
     && rm rustup.sh
-    
-ENV PATH="/root/.cargo/bin:${PATH}"
+
+ENV PATH="/opt/cargo/bin:${PATH}"
+#ENV PATH="/root/.cargo/bin:${PATH}"
 
 # -----------------
 # Python env
@@ -39,11 +42,13 @@ RUN curl -fsSL https://pyenv.run -o pyenv.sh \
     && ./pyenv.sh -y \
     && rm pyenv.sh
 
-ENV PYENV_ROOT="/root/.pyenv"
+ENV PYENV_ROOT=/opt/pyenv
 ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 
 RUN pyenv install 3.13.11
 RUN pyenv global 3.13.11
+
+ENV PATH="/opt/pyenv/versions/3.13.11/bin:${PATH}"
 # -----------------
 # JupyterLab
 # -----------------
@@ -77,19 +82,21 @@ RUN pip install --no-cache-dir jupyterlab notebook \
 # -----------------
 # R packages
 # -----------------
+RUN mkdir -p /usr/local/share/jupyter/kernels
 
 RUN R -e "install.packages(c('tidyverse','IRkernel'), repos='https://cloud.r-project.org')"
-
-RUN jupyter kernelspec list
 
 RUN R -e "IRkernel::installspec(user = FALSE)"
 
 # -----------------
 # Julia packages
 # -----------------
-ENV PATH="/root/.juliaup/bin:${PATH}"
 
-RUN julia -e 'using Pkg; Pkg.add(["IJulia","Flux","MLJ"])'
+ENV PATH="/root/.juliaup/bin:${PATH}"
+ENV JULIA_DEPOT_PATH=/opt/julia-depot
+
+RUN julia -e 'using Pkg; Pkg.add(["IJulia","Flux","MLJ"])' \
+&& cp -r /root/.local/share/jupyter/kernels/julia-* /usr/local/share/jupyter/kernels/
 
 # -----------------
 # Rust kernel
@@ -97,7 +104,14 @@ RUN julia -e 'using Pkg; Pkg.add(["IJulia","Flux","MLJ"])'
 RUN useradd -m -s /bin/bash datalab && echo 'datalab:datalab' | chpasswd
 
 RUN cargo install evcxr_jupyter
-RUN evcxr_jupyter --install
+RUN evcxr_jupyter --install \ 
+&& cp -r /root/.local/share/jupyter/kernels/rust /usr/local/share/jupyter/kernels/
+
+RUN jupyter kernelspec list
+
+# -----------------
+# JupyterHub: usuario, config y arranque
+# -----------------
 
 #RUN mkdir -p /etc/jupyterhub
 #RUN jupyterhub --generate-config -f /etc/jupyterhub/jupyterhub_config.py
