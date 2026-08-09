@@ -14,8 +14,8 @@ RUN apt update && apt install -y \
     libssl-dev \
     libxml2-dev \
     libcurl4-openssl-dev \
-    ca-certificates \
-    build-essential bash \
+    ca-certificates nodejs npm \
+    build-essential bash nano vim \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -fsSL https://install.julialang.org -o install-julia.sh \
@@ -49,10 +49,7 @@ RUN pyenv global 3.13.11
 # -----------------
 
 RUN pip install --no-cache-dir \
-    poetry jupyterlab \
-    jupyter-client \
-    jupyter-core \
-    ipykernel \
+    poetry ipykernel \
     numpy pandas scipy polars \
     matplotlib seaborn plotly altair \
     scikit-learn \
@@ -65,11 +62,17 @@ RUN pip install --no-cache-dir \
     tensorflow-aarch64 onnxruntime \
     sentence-transformers \
     fastparquet numexpr \
-    optuna
+    optuna jupyterhub
 
 RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
     torch
+
+RUN npm install -g configurable-http-proxy
+
+RUN pip install --no-cache-dir jupyterlab notebook \
+    jupyter-client \
+    jupyter-core 
 
 # -----------------
 # R packages
@@ -91,11 +94,18 @@ RUN julia -e 'using Pkg; Pkg.add(["IJulia","Flux","MLJ"])'
 # -----------------
 # Rust kernel
 # -----------------
+RUN useradd -m -s /bin/bash datalab && echo 'datalab:datalab' | chpasswd
 
 RUN cargo install evcxr_jupyter
 RUN evcxr_jupyter --install
 
+#RUN mkdir -p /etc/jupyterhub
+#RUN jupyterhub --generate-config -f /etc/jupyterhub/jupyterhub_config.py
+RUN mkdir -p /etc/jupyterhub /srv/jupyterhub
+COPY jupyterhub_config.py /etc/jupyterhub/jupyterhub_config.py
+WORKDIR /srv/jupyterhub
 
 EXPOSE 8888
 
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root"]
+#CMD ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root"]
+CMD ["jupyterhub", "-f", "/etc/jupyterhub/jupyterhub_config.py"]

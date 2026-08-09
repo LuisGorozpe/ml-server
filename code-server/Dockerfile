@@ -14,21 +14,27 @@ RUN apt update && sudo apt install -y \
     libffi-dev \
     liblzma-dev && sudo rm -rf /var/lib/apt/lists/*
 
+USER coder
+WORKDIR /home/coder
+
 RUN curl -fsSL https://pyenv.run -o pyenv.sh \
     && chmod +x pyenv.sh \
     && sudo ./pyenv.sh -y \
     && rm pyenv.sh
 
-ENV PYENV_ROOT="/root/.pyenv"
+ENV PYENV_ROOT="/home/coder/.pyenv"
 ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 
 
 RUN pyenv install 3.13.0
 RUN pyenv global 3.13.0
 
-RUN pip install \
+RUN pip install --no-cache-dir \
     poetry \
     mlflow \
     jupyterlab
+
+RUN code-server --install-extension ms-python.python \
+ && code-server --install-extension ms-toolsai.jupyter
 
 EXPOSE 8080
