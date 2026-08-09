@@ -2,7 +2,7 @@ FROM codercom/code-server:latest
 
 USER root
 
-RUN apt update && sudo apt install -y \
+RUN apt update && apt install -y \
     python3 python3-pip \
     git \
     curl bash build-essential \
@@ -17,17 +17,17 @@ RUN apt update && sudo apt install -y \
 USER coder
 WORKDIR /home/coder
 
-RUN curl -fsSL https://pyenv.run -o pyenv.sh \
-    && chmod +x pyenv.sh \
-    && sudo ./pyenv.sh -y \
-    && rm pyenv.sh
+#RUN curl -fsSL https://pyenv.run -o pyenv.sh \
+#    && chmod +x pyenv.sh \
+#    && sudo ./pyenv.sh -y \
+#    && rm pyenv.sh
+RUN curl -fsSL https://pyenv.run | bash
+
 
 ENV PYENV_ROOT="/home/coder/.pyenv"
 ENV PATH="$PYENV_ROOT/bin:$PYENV_ROOT/shims:$PATH"
 
-
-RUN pyenv install 3.13.0
-RUN pyenv global 3.13.0
+RUN pyenv install 3.13.0 && pyenv global 3.13.0
 
 RUN pip install --no-cache-dir \
     poetry \
