@@ -1,5 +1,25 @@
 # ML Server — Machine Learning Data Lab
 
+Table of Contents (English)
+
+- [Key files and folders](#key-files-and-folders)
+- [Architecture summary](#architecture-summary)
+- [Designed and tested on Orange Pi 5 Plus (ARM)](#designed-and-tested-on-orange-pi-5-plus-arm)
+- [JupyterHub components and kernels](#jupyterhub-components-and-kernels)
+  - [System packages installed via apt](#system-packages-installed-via-apt)
+  - [Python packages installed globally (pip)](#python-packages-installed-globally-pip)
+  - [Python version management: pyenv](#python-version-management-pyenv)
+  - [Creating virtual environments and adding kernels to JupyterHub](#creating-virtual-environments-and-adding-kernels-to-jupyterhub)
+  - [Rust kernel (evcxr_jupyter)](#rust-kernel-evcxr_jupyter)
+  - [Julia kernel (IJulia)](#julia-kernel-ijulia)
+  - [R kernel (IRkernel)](#r-kernel-irkernel)
+- [Adapting to x86_64 (Intel/AMD)](#adapting-to-x86_64-intelamd)
+- [.env and .env.example](#env-file-and-envexample)
+- [Security warning](#security-warning)
+- [HOWTO: multi-arch and docker buildx](#howto-multi-arch-and-docker-buildx)
+- [Contact](#contact)
+
+
 This repository contains a Docker Compose setup and a set of Dockerfiles to deploy a Machine Learning "Data Lab": Jupyter/JupyterHub, MLflow, MinIO (artifacts), code-server (remote IDE) and other utilities.
 
 Key files and folders
@@ -31,6 +51,195 @@ Important notes for ARM
 - Packages like `tensorflow-aarch64` and other ARM-specific wheels are referenced in the Dockerfile.
 - The repository installs kernels for R, Julia and Rust; those steps may trigger compilation or package downloads that can take significant time on small ARM boards.
 - Consider enabling swap or using a more powerful host to build images (especially when compiling Rust/Julia packages or installing heavy Python dependencies).
+
+JupyterHub components and kernels
+
+This section documents the JupyterHub-related components installed by the `jupyterlab` Dockerfile and explains how to manage Python versions, virtual environments, and kernels.
+
+System packages installed via apt
+
+The Dockerfile installs a set of OS-level packages required for building and running many data-science tools. Main packages installed by `apt` include:
+
+- curl, git, build-essential, cmake
+- python3, python3-pip, python3-venv
+- r-base, xz-utils
+- clang
+- sqlite3, tk-dev
+- libsqlite3-dev, libncursesw5-dev
+- libssl-dev
+- libxml2-dev
+- libcurl4-openssl-dev
+- ca-certificates, nodejs, npm
+- bash, nano, vim
+
+These provide compilers, interpreters and development headers needed by R, Julia, Rust, and many Python packages.
+
+Python packages installed globally (pip)
+
+The Dockerfile installs a curated set of Python packages into the global Python environment (via pip). These are installed during image build and are available to all users unless overridden by environment-specific kernels:
+
+- poetry, ipykernel
+- numpy, pandas, scipy, polars
+- matplotlib, seaborn, plotly, altair
+- scikit-learn
+- xgboost, catboost
+- transformers, datasets, accelerate
+- mlflow, boto3, wandb
+- feature-engine, imbalanced-learn
+- dask, pyarrow, duckdb
+- tqdm, rich, ipywidgets
+- tensorflow-aarch64, onnxruntime
+- sentence-transformers
+- fastparquet, numexpr
+- optuna, jupyterhub
+- torch (installed from PyTorch CPU index)
+
+Additionally, Jupyter components are installed:
+
+- jupyterlab, notebook, jupyter-client, jupyter-core
+
+The image also installs `configurable-http-proxy` globally via npm (used by JupyterHub).
+
+Python version management: pyenv
+
+The image sets up `pyenv` at `/opt/pyenv` and installs Python 3.13.11, setting it as the global Python for the image:
+
+- PYENV_ROOT=/opt/pyenv
+- pyenv install 3.13.11
+- pyenv global 3.13.11
+
+This enables installing additional Python versions with `pyenv install <version>` and switching between them using `pyenv global|local|shell`.
+
+Creating virtual environments and adding kernels to JupyterHub
+
+Two common workflows are supported:
+
+1) Using python -m venv (recommended, simple)
+
+- Create a new virtualenv:
+
+  python -m venv /opt/venvs/myenv
+  source /opt/venvs/myenv/bin/activate
+  pip install --upgrade pip
+  pip install ipykernel [any other packages]
+
+- Register the virtualenv as a Jupyter kernel (system-wide or for JupyterHub):
+
+  For a user-local kernel:
+  ```bash
+  python -m ipykernel install --user --name myenv --display-name "Python (myenv)"
+  ```
+
+  For a system-wide kernel (requires root inside the container; installs to /usr/local/share/jupyter/kernels):
+  ```bash
+  python -m ipykernel install --name myenv --display-name "Python (myenv)" --sys-prefix
+  ```
+
+  Or explicitly to /usr/local/share/jupyter/kernels:
+  ```bash
+  python -m ipykernel install --prefix=/usr/local --name myenv --display-name "Python (myenv)"
+  ```
+
+2) Using pyenv (installing additional Python versions)
+
+- Install a new Python version with pyenv:
+
+  pyenv install 3.12.2
+  pyenv virtualenv 3.12.2 myenv-3.12
+  pyenv activate myenv-3.12
+
+- Inside that environment install ipykernel and any packages, then register the kernel as above:
+
+  pip install ipykernel
+  python -m ipykernel install --name myenv-3.12 --display-name "Python (3.12 - myenv)" --sys-prefix
+
+Note: if `pyenv virtualenv` is not available in the image, it can be added or `python -m venv` can be used after `pyenv install` by referring to the pyenv-managed interpreter path.
+
+Rust kernel (evcxr_jupyter)
+
+The Rust toolchain is installed using rustup (CARGO_HOME=/opt/cargo, RUSTUP_HOME=/opt/rustup). The Rust Jupyter kernel is installed via `evcxr_jupyter`:
+
+- cargo install evcxr_jupyter
+- evcxr_jupyter --install
+- Kernel spec copied to /usr/local/share/jupyter/kernels/
+
+This provides an interactive Rust kernel in Jupyter.
+
+Julia kernel (IJulia)
+
+Julia is installed with the official installer script. The Dockerfile then installs IJulia and common ML packages:
+
+- julia -e 'using Pkg; Pkg.add(["IJulia","Flux","MLJ"])'
+- Kernel specs are copied to /usr/local/share/jupyter/kernels/
+
+R kernel (IRkernel)
+
+R (r-base) is installed via apt and then the tidyverse and IRkernel packages are installed:
+
+- R -e "install.packages(c('tidyverse','IRkernel'), repos='https://cloud.r-project.org')"
+- R -e "IRkernel::installspec(user = FALSE)"  # installs kernel system-wide
+
+Listing installed kernels
+
+The Dockerfile runs `jupyter kernelspec list` to show available kernels after installation; you should see entries for python, julia, R and rust when the image build completes.
+
+Best practices for adding kernels in JupyterHub
+
+- For multi-user JupyterHub deployments, install kernels system-wide (use `--sys-prefix` or run install commands as root) so all users can access them.
+- Prefer creating isolated virtual environments per project and register them as kernels rather than installing many packages into the global interpreter.
+- Record the kernel display name clearly to indicate the Python version and purpose (e.g., "Python (3.13 - ml)" ).
+
+Helper script: scripts/add_kernel.sh
+
+A helper script has been added at `scripts/add_kernel.sh` to simplify creating a Python virtual environment, installing packages and registering an ipykernel. The script defaults to creating venvs under `/opt/venvs/<NAME>` and registers kernels with `--sys-prefix` (system-wide under the container) unless `--prefix` is passed.
+
+Example - copy-and-run (recommended)
+
+1) Copy the script from the repository into the running jupyterlab container and execute it (host shell):
+
+```bash
+# find container id (or use docker compose name)
+CONTAINER=$(docker compose ps -q jupyterlab)
+# copy script into container
+docker cp ./scripts/add_kernel.sh ${CONTAINER}:/usr/local/bin/add_kernel.sh
+# make it executable and run it inside the container as root
+docker compose exec jupyterlab chmod +x /usr/local/bin/add_kernel.sh
+docker compose exec jupyterlab /usr/local/bin/add_kernel.sh -n mlenv -r "numpy pandas scikit-learn" -d "Python (mlenv)"
+```
+
+2) One-off run mounting the scripts directory (no copy needed):
+
+```bash
+# from project root
+docker compose run --rm -v "$(pwd)/scripts:/work/scripts" jupyterlab /work/scripts/add_kernel.sh -n mlenv -r "numpy pandas scikit-learn" -d "Python (mlenv)"
+```
+
+Using the JupyterHub terminal (in-browser)
+
+If you have access to the JupyterHub terminal in the browser (Terminal tab), you can create or fetch the script from there and run it:
+
+- Option A: paste the script content into a new file:
+
+```bash
+cat > /tmp/add_kernel.sh <<'SCRIPT'
+# (paste the script contents here)
+SCRIPT
+chmod +x /tmp/add_kernel.sh
+sudo /tmp/add_kernel.sh -n mlenv -r "numpy pandas scikit-learn" -d "Python (mlenv)"
+```
+
+- Option B: fetch the script directly if the repository is accessible via HTTP (raw URL):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<user>/<repo>/main/scripts/add_kernel.sh -o /tmp/add_kernel.sh
+chmod +x /tmp/add_kernel.sh
+sudo /tmp/add_kernel.sh -n mlenv -r "numpy pandas scikit-learn" -d "Python (mlenv)"
+```
+
+Notes
+
+- To make the kernel available to all Hub users register it with `--sys-prefix` (default in the helper) or use `--prefix=/usr/local`.
+- Running the script as root inside the container ensures system-level installation; if you run it as a non-root user, consider `--user` kernel installs or installing into a shared directory.
 
 Adapting to x86_64 (Intel/AMD)
 
@@ -166,9 +375,44 @@ Contact
 
 This README was generated to document the project and guide adaptation between ARM and x86. If automatic changes to Dockerfiles (ARG parametrization) are desired, those can be applied upon request.
 
+Repository tree (English)
+
+- docker-compose.yml (Docker Compose service/volume definitions)
+- LICENSE (project license)
+- HOWTO-multiarch.md (guide to build multi-architecture images with buildx)
+- jupyterlab/ (JupyterHub/JupyterLab build context)
+  - Dockerfile (instructions to build the JupyterLab/JupyterHub image)
+  - jupyterhub_config.py (JupyterHub configuration used at container runtime)
+- code-server/ (code-server build context)
+  - Dockerfile (build for code-server / VS Code in the browser)
+- marimo/ (auxiliary service context)
+  - Dockerfile (build for marimo service)
+- .env.example (example environment variables for docker-compose and builds)
+- README.md (this documentation)
+
 ---
 
 # ML Server — Data Lab para Machine Learning
+
+Tabla de contenidos (Español)
+
+- [Principales archivos y carpetas](#principales-archivos-y-carpetas)
+- [Resumen arquitectural](#resumen-arquitectural)
+- [Diseñado y probado en Orange Pi 5 Plus (ARM)](#diseñado-y-probado-en-orange-pi-5-plus-arm)
+- [Componentes de JupyterHub y kernels](#componentes-de-jupyterhub-y-kernels)
+  - [Paquetes del sistema (apt)](#paquetes-del-sistema-apt)
+  - [Paquetes Python instalados globalmente (pip)](#paquetes-python-instalados-globalmente-pip)
+  - [pyenv y gestión de versiones de Python](#pyenv-y-gestión-de-versiones-de-python)
+  - [Crear entornos virtuales y añadir kernels](#crear-entornos-virtuales-y-añadir-kernels)
+  - [Kernel de Rust (evcxr_jupyter)](#kernel-de-rust-evcxr_jupyter)
+  - [Kernel de Julia (IJulia)](#kernel-de-julia-ijulia)
+  - [Kernel de R (IRkernel)](#kernel-de-r-irkernel)
+- [Adaptación a arquitecturas x86_64 (Intel/AMD)](#adaptación-a-arquitecturas-x86_64-intelamd)
+- [Archivo .env y .env.example](#archivo-env-y-envexample)
+- [Advertencia de seguridad](#advertencia-de-seguridad)
+- [HOWTO: multi-arch y buildx](#howto-multi-arch-y-buildx)
+- [Contacto](#contacto)
+
 
 Este repositorio contiene una composición Docker (Docker Compose) y un conjunto de Dockerfiles para desplegar un "Data Lab" orientado a tareas de Machine Learning: Jupyter/JupyterHub, MLflow, MinIO (artefactos), code-server (IDE remota) y otras utilidades.
 
@@ -201,6 +445,188 @@ Puntos importantes para ARM:
 - Paquetes como `tensorflow-aarch64` y ruedas específicas para CPU ARM están ya referenciados en el Dockerfile.
 - El repositorio instala kernels para R, Julia y Rust; esto implica compilación/instalación en tiempo de build, que en algunas placas ARM puede tardar bastante.
 - Recomendar habilitar suficiente swap o usar un host con recursos adecuados al construir las imágenes (especialmente al compilar paquetes Rust/Julia o instalar grandes dependencias Python).
+
+Componentes de JupyterHub y kernels
+
+Esta sección documenta los componentes relacionados con JupyterHub instalados por el Dockerfile de `jupyterlab` y explica cómo gestionar versiones de Python, entornos virtuales y kernels.
+
+Paquetes del sistema instalados vía apt
+
+El Dockerfile instala un conjunto de paquetes a nivel OS necesarios para compilar y ejecutar muchas herramientas de ciencia de datos. Los paquetes principales instalados son:
+
+- curl, git, build-essential, cmake
+- python3, python3-pip, python3-venv
+- r-base, xz-utils
+- clang
+- sqlite3, tk-dev
+- libsqlite3-dev, libncursesw5-dev
+- libssl-dev
+- libxml2-dev
+- libcurl4-openssl-dev
+- ca-certificates, nodejs, npm
+- bash, nano, vim
+
+Estos proveen compiladores, intérpretes y headers de desarrollo necesarios por R, Julia, Rust y muchos paquetes Python.
+
+Paquetes Python instalados globalmente (pip)
+
+El Dockerfile instala un conjunto predefinido de paquetes Python en el entorno global. Estos están disponibles para todos los usuarios en la imagen:
+
+- poetry, ipykernel
+- numpy, pandas, scipy, polars
+- matplotlib, seaborn, plotly, altair
+- scikit-learn
+- xgboost, catboost
+- transformers, datasets, accelerate
+- mlflow, boto3, wandb
+- feature-engine, imbalanced-learn
+- dask, pyarrow, duckdb
+- tqdm, rich, ipywidgets
+- tensorflow-aarch64, onnxruntime
+- sentence-transformers
+- fastparquet, numexpr
+- optuna, jupyterhub
+- torch (instalado desde el índice CPU de PyTorch)
+
+Además se instalan componentes de Jupyter:
+
+- jupyterlab, notebook, jupyter-client, jupyter-core
+
+También se instala `configurable-http-proxy` globalmente vía npm (usado por JupyterHub).
+
+Gestión de versiones de Python: pyenv
+
+La imagen configura `pyenv` en `/opt/pyenv` e instala Python 3.13.11, configurándolo como la versión global:
+
+- PYENV_ROOT=/opt/pyenv
+- pyenv install 3.13.11
+- pyenv global 3.13.11
+
+Esto permite instalar versiones adicionales con `pyenv install <version>` y cambiar entre ellas con `pyenv global|local|shell`.
+
+Crear entornos virtuales y añadir kernels a JupyterHub
+
+Flujos de trabajo recomendados:
+
+1) Usando python -m venv (recomendado y sencillo)
+
+- Crear un virtualenv:
+
+  python -m venv /opt/venvs/mienv
+  source /opt/venvs/mienv/bin/activate
+  pip install --upgrade pip
+  pip install ipykernel [otros paquetes]
+
+- Registrar el virtualenv como kernel en Jupyter (local o sistema):
+
+  Para un kernel local de usuario:
+  ```bash
+  python -m ipykernel install --user --name mienv --display-name "Python (mienv)"
+  ```
+
+  Para un kernel a nivel sistema (requiere root dentro del contenedor; instalará en /usr/local/share/jupyter/kernels):
+  ```bash
+  python -m ipykernel install --name mienv --display-name "Python (mienv)" --sys-prefix
+  ```
+
+  O explícitamente en /usr/local/share/jupyter/kernels:
+  ```bash
+  python -m ipykernel install --prefix=/usr/local --name mienv --display-name "Python (mienv)"
+  ```
+
+Script helper: scripts/add_kernel.sh (uso en la práctica)
+
+Se añadió un script helper en `scripts/add_kernel.sh` para simplificar la creación de virtualenvs, instalación de paquetes y registro de ipykernels. Por defecto crea los entornos en `/opt/venvs/<NAME>` y registra el kernel con `--sys-prefix`.
+
+Ejemplo - copiar y ejecutar desde el host (recomendado):
+
+```bash
+CONTAINER=$(docker compose ps -q jupyterlab)
+docker cp ./scripts/add_kernel.sh ${CONTAINER}:/usr/local/bin/add_kernel.sh
+docker compose exec jupyterlab chmod +x /usr/local/bin/add_kernel.sh
+docker compose exec jupyterlab /usr/local/bin/add_kernel.sh -n mienv -r "numpy pandas scikit-learn" -d "Python (mienv)"
+```
+
+Ejemplo - ejecución one-off montando el directorio scripts:
+
+```bash
+# desde la raíz del proyecto
+docker compose run --rm -v "$(pwd)/scripts:/work/scripts" jupyterlab /work/scripts/add_kernel.sh -n mienv -r "numpy pandas scikit-learn" -d "Python (mienv)"
+```
+
+Usando la terminal de JupyterHub (en el navegador):
+
+- Opción A: crear y pegar el script directamente en la terminal:
+
+```bash
+cat > /tmp/add_kernel.sh <<'SCRIPT'
+# (pega aquí el contenido del script)
+SCRIPT
+chmod +x /tmp/add_kernel.sh
+sudo /tmp/add_kernel.sh -n mienv -r "numpy pandas scikit-learn" -d "Python (mienv)"
+```
+
+- Opción B: descargarlo si el repositorio es accesible públicamente (raw URL):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<usuario>/<repo>/main/scripts/add_kernel.sh -o /tmp/add_kernel.sh
+chmod +x /tmp/add_kernel.sh
+sudo /tmp/add_kernel.sh -n mienv -r "numpy pandas scikit-learn" -d "Python (mienv)"
+```
+
+Notas:
+
+- Para que el kernel sea visible por todos los usuarios registra con `--sys-prefix` (comportamiento por defecto del helper) o usa `--prefix=/usr/local`.
+- Ejecutar el script como root dentro del contenedor asegura instalación a nivel sistema; si se ejecuta como usuario no-root, usar instalaciones de usuario o rutas compartidas.
+
+2) Usando pyenv (instalar versiones adicionales)
+
+- Instalar una versión con pyenv:
+
+  pyenv install 3.12.2
+  pyenv virtualenv 3.12.2 mienv-3.12
+  pyenv activate mienv-3.12
+
+- Dentro del entorno instalar ipykernel y registrar el kernel como arriba:
+
+  pip install ipykernel
+  python -m ipykernel install --name mienv-3.12 --display-name "Python (3.12 - mienv)" --sys-prefix
+
+Nota: si `pyenv virtualenv` no está disponible, puede añadirse o pueden usarse `python -m venv` apuntando al intérprete administrado por pyenv.
+
+Kernel de Rust (evcxr_jupyter)
+
+La toolchain Rust se instala con rustup (CARGO_HOME=/opt/cargo, RUSTUP_HOME=/opt/rustup). El kernel Rust se instala con `evcxr_jupyter`:
+
+- cargo install evcxr_jupyter
+- evcxr_jupyter --install
+- El kernelspec se copia a /usr/local/share/jupyter/kernels/
+
+Esto proporciona un kernel interactivo de Rust en Jupyter.
+
+Kernel de Julia (IJulia)
+
+Julia se instala con el instalador oficial y luego se añaden paquetes útiles para ML:
+
+- julia -e 'using Pkg; Pkg.add(["IJulia","Flux","MLJ"])'
+- Los kernels se copian a /usr/local/share/jupyter/kernels/
+
+Kernel de R (IRkernel)
+
+R se instala via apt y luego se instalan tidyverse e IRkernel:
+
+- R -e "install.packages(c('tidyverse','IRkernel'), repos='https://cloud.r-project.org')"
+- R -e "IRkernel::installspec(user = FALSE)"  # instala kernel a nivel sistema
+
+Listado de kernels instalados
+
+El Dockerfile ejecuta `jupyter kernelspec list` para mostrar los kernels disponibles tras la instalación; deberías ver python, julia, R y rust cuando la build finalice.
+
+Buenas prácticas para añadir kernels en JupyterHub
+
+- Para despliegues multi-usuario de JupyterHub, instala kernels a nivel sistema (usar `--sys-prefix` o ejecutar como root) para que todos los usuarios los vean.
+- Prefiere crear entornos virtuales aislados por proyecto y registrarlos como kernels en lugar de instalar muchos paquetes en el intérprete global.
+- Etiqueta el display name indicando la versión de Python y el propósito (por ejemplo: "Python (3.13 - ml)").
 
 Adaptación a arquitecturas x86_64 (Intel/AMD)
 
@@ -356,4 +782,19 @@ Se añadió el archivo [HOWTO-multiarch.md](/home/leag555/mlserver/ml-server/HOW
 Contacto
 
 Este README fue generado para documentar el proyecto y guiar la adaptación entre ARM y x86. Para cambios automáticos en los Dockerfiles (parametrización con ARG) puedo aplicarlos si se desea que haga las modificaciones en el repositorio.
+
+Árbol del repositorio (español)
+
+- docker-compose.yml (definición de servicios y volúmenes para docker-compose)
+- LICENSE (licencia del proyecto)
+- HOWTO-multiarch.md (guía para construir imágenes multi-arquitectura con buildx)
+- jupyterlab/ (contexto de construcción de JupyterHub/JupyterLab)
+  - Dockerfile (instrucciones para construir la imagen de JupyterLab/JupyterHub)
+  - jupyterhub_config.py (configuración de JupyterHub usada en tiempo de ejecución)
+- code-server/ (contexto de construcción de code-server)
+  - Dockerfile (build para code-server / VS Code en el navegador)
+- marimo/ (contexto del servicio auxiliar)
+  - Dockerfile (build para el servicio marimo)
+- .env.example (archivo ejemplo con variables de entorno para docker-compose y builds)
+- README.md (esta documentación)
 
