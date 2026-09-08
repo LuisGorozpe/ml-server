@@ -17,10 +17,6 @@ RUN apt update && apt install -y \
 USER coder
 WORKDIR /home/coder
 
-#RUN curl -fsSL https://pyenv.run -o pyenv.sh \
-#    && chmod +x pyenv.sh \
-#    && sudo ./pyenv.sh -y \
-#    && rm pyenv.sh
 RUN curl -fsSL https://pyenv.run | bash
 
 

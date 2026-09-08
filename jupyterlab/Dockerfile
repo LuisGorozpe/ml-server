@@ -1,4 +1,4 @@
-# FROM debian:bookworm-slim (uncoment  this line to build for amd64)
+# FROM debian:bookworm-slim (uncoment this line to build for x84 intel/AMD)
 # FROM arm64v8/debian:stable
 FROM ophub/armbian-bookworm
 
